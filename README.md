@@ -15,8 +15,8 @@ We train 7B-sized open models to come close to closed-source models like LearnLM
 **Dataset**: [BigMathRL-Filtered](https://huggingface.co/datasets/rd211/Big-Math-RL-Verified-Filtered) which is a subset of [Big-Math-RL-Verified](https://huggingface.co/datasets/SynthLabsAI/Big-Math-RL-Verified)
 
 🧠 **Models**: We release two versions of our 7B tutor model:
-- 🤗 [eth-nlped/TutorRL-7B](https://huggingface.co/eth-nlped/TutorRL-7B) — standard version without internal planning  
-- 🤗 [eth-nlped/TutorRL-7B-think](https://huggingface.co/eth-nlped/TutorRL-7B-think) — enhanced with explicit `<think>` tags for interpretable planning
+- 🤗 [eth-nlped/TutorRL-7B](https://huggingface.co/eth-nlped/TutorRL-7B) — standard version without internal planning ($\lambda=0.75$)  
+- 🤗 [eth-nlped/TutorRL-7B-think](https://huggingface.co/eth-nlped/TutorRL-7B-think) — enhanced with explicit `<think>` tags for interpretable planning (hard- $\lambda=1.0$)
 
 🔓 **License**: CC-BY-4.0
 
