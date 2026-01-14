@@ -41,6 +41,8 @@ class ParallelvLLMInference:
         log_file_path: Optional[str] = None,
     ):
         self.model_path = model_path
+        self.base_model_path = model_path
+        self.adapter_path = None
         self.model_save_path = model_save_path
         self.total_gpus = torch.cuda.device_count()
         self.gpus_per_instance = gpus_per_instance
@@ -68,7 +70,7 @@ class ParallelvLLMInference:
 
         # Try downloading the model to cache
         try:
-            snapshot_download(self.model_path)
+            snapshot_download(self.base_model_path)
         except Exception as e:
             logger.warning(f"Could not download model: {e}; will load from cache/local")
 
@@ -148,8 +150,12 @@ class ParallelvLLMInference:
         latest = self._get_latest_checkpoint_id()
         if latest is not None:
             new_path = os.path.join(self.model_save_path, f"checkpoint-{latest}")
-            logger.info(f"Reload: switching model_path to {new_path}")
-            self.model_path = new_path
+            if self.use_lora:
+                logger.info(f"Reload: switching adapter_path to {new_path}")
+                self.adapter_path = new_path
+            else:
+                logger.info(f"Reload: switching model_path to {new_path}")
+                self.model_path = new_path
             self._last_reload_ckpt = latest
 
         self.cleanup()
@@ -215,12 +221,12 @@ class ParallelvLLMInference:
         torch.cuda.empty_cache()
         logger.info("Cleaned up all resources")
 
-    def _handle_reward_task(self, llm, prompts: List[str], tokenizer):
+    def _handle_reward_task(self, llm, prompts: List[str], tokenizer, lora_request: Optional["LoRARequest"] = None):
         prompts = [
             tokenizer.decode(tokenizer.encode(p)[: self.max_model_len - 1])
             for p in prompts
         ]
-        return llm.encode(prompts)
+        return llm.encode(prompts, lora_request=lora_request)
 
     def _handle_embedding_task(self, llm, prompts: List[str]):
         return llm.embed(prompts)
@@ -235,6 +241,7 @@ class ParallelvLLMInference:
         sampling_params: dict,
         meta: Optional[dict],
         counter: int,
+        lora_request: Optional["LoRARequest"] = None,
     ):
         if meta is not None:
             from ..utils.shared_memory import load_shared_state_dict
@@ -243,9 +250,9 @@ class ParallelvLLMInference:
             # llm.llm_engine.model_executor.driver_worker.model_runner.model.load_weights(
             #     state
             # )
-            return llm.chat(prompts, sampling_params=sampling_params)
+            return llm.chat(prompts, sampling_params=sampling_params, lora_request=lora_request)
 
-        return llm.chat(prompts, sampling_params=sampling_params)
+        return llm.chat(prompts, sampling_params=sampling_params, lora_request=lora_request)
 
     def _worker_loop(
         self, gpu_group: List[int], task_queue, result_queue, inference_task
@@ -261,11 +268,12 @@ class ParallelvLLMInference:
             os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
 
         from vllm import LLM
+        from vllm.lora.request import LoRARequest
 
         print(f"Worker on GPUs {gpu_group} initializing for task '{inference_task}'...")
 
         llm = LLM(
-            model=self.model_path,
+            model=self.base_model_path,
             tensor_parallel_size=self.gpus_per_instance,
             trust_remote_code=True,
             gpu_memory_utilization=self.gpu_memory_utilization,
@@ -278,6 +286,10 @@ class ParallelvLLMInference:
             quantization="bitsandbytes" if self.bits_and_bytes else None,
             load_format="bitsandbytes" if self.bits_and_bytes else "auto",
         )
+
+        lora_request = None
+        if self.use_lora and self.adapter_path:
+            lora_request = LoRARequest("adapter", 1, self.adapter_path)
         tokenizer = llm.get_tokenizer()
 
         if self.load_and_unload:
@@ -306,14 +318,14 @@ class ParallelvLLMInference:
             prompts = [p for _, p in chunk]
 
             if inference_task == InferenceTask.REWARD:
-                outs = self._handle_reward_task(llm, prompts, tokenizer)
+                outs = self._handle_reward_task(llm, prompts, tokenizer, lora_request)
             elif inference_task == InferenceTask.EMBEDDING:
                 outs = self._handle_embedding_task(llm, prompts)
             elif inference_task == InferenceTask.CLASSIFY:
                 outs = self._handle_classify_task(llm, prompts)
             else:
                 outs = self._handle_causallm_task(
-                    llm, prompts, sampling_params, meta, counter
+                    llm, prompts, sampling_params, meta, counter, lora_request
                 )
                 counter += 1
 

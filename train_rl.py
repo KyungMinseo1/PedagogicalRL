@@ -11,6 +11,7 @@ from config.train_rl_model import RLModelTrainingConfig
 from transformers import set_seed
 from dotenv import load_dotenv
 from transformers import AutoTokenizer
+from peft import LoraConfig as PeftLoraConfig
 from datasets import Dataset
 from src.grpo.config import ClassroomGRPOConfig
 from src.grpo.trainer import ClassroomGRPOTrainer
@@ -70,7 +71,7 @@ def main(cfg: RLModelTrainingConfig):
     torch_dtype = torch.bfloat16
     model_kwargs = dict(
         trust_remote_code=True,
-        attn_implementation="flash_attention_2",
+        attn_implementation="sdpa",
         torch_dtype=torch_dtype,
         use_cache=False if train_config.gradient_checkpointing else True,
     )
@@ -106,6 +107,20 @@ def main(cfg: RLModelTrainingConfig):
         cfg.generation.server_port
     )
     length_reward = construct_length_reward_func(cfg.generation.server_port)
+
+    #############################################################################
+    # PEFT Config
+    #############################################################################
+    peft_config = None
+    if lora_config.enable:
+        peft_config = PeftLoraConfig(
+            r=lora_config.rank,
+            lora_alpha=lora_config.alpha,
+            target_modules=lora_config.target_modules,
+            lora_dropout=lora_config.dropout,
+            bias=lora_config.bias,
+            task_type="CAUSAL_LM",
+        )
 
     #############################################################################
     # Training
@@ -155,6 +170,7 @@ def main(cfg: RLModelTrainingConfig):
             use_experimental_shared_memory=cfg.generation.use_experimental_shared_memory,
             batch_size_reference_model=cfg.train.batch_size_ref_model,
             save_policy_to_disk_every_n_steps=cfg.train.save_policy_to_disk_every_n,
+            peft_config=peft_config,
         ),
         train_dataset=train_dataset,
         processing_class=tokenizer,

@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional, Union
+from typing import Optional, Union, Any
 
 import transformers
 from packaging import version
@@ -180,4 +180,9 @@ class ClassroomGRPOConfig(TrainingArguments):
             "help": "Number of steps to save the policy to disk. vLLM seems to go haywire if we always do online updates, so "
             "we save the policy to disk every n steps and load it back into vLLM. This is a workaround for now."
         },
+    )
+
+    peft_config: Optional[Any] = field(
+        default=None,
+        metadata={"help": "The PEFT configuration for the model."},
     )

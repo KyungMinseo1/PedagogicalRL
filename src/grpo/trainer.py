@@ -50,6 +50,7 @@ from accelerate.utils import (
     is_peft_model,
     set_seed,
 )
+from peft import get_peft_model, prepare_model_for_kbit_training
 from datasets import Dataset, IterableDataset
 from packaging import version
 from torch import nn
@@ -305,10 +306,14 @@ class ClassroomGRPOTrainer(Trainer):
         model_init_kwargs["use_cache"] = (
             False if args.gradient_checkpointing else model_init_kwargs.get("use_cache")
         )
-        model_init_kwargs["attn_implementation"] = "sdpa" # force scaled dot product attention
         model = AutoModelForCausalLM.from_pretrained(
             self.model_name_or_path, **model_init_kwargs
         )
+
+        if args.peft_config is not None:
+            if getattr(model, "is_loaded_in_8bit", False) or getattr(model, "is_loaded_in_4bit", False):
+                model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=args.gradient_checkpointing)
+            model = get_peft_model(model, args.peft_config)
 
         # Enable gradient checkpointing if requested
         if args.gradient_checkpointing:
