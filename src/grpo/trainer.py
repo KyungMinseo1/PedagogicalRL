@@ -305,6 +305,7 @@ class ClassroomGRPOTrainer(Trainer):
         model_init_kwargs["use_cache"] = (
             False if args.gradient_checkpointing else model_init_kwargs.get("use_cache")
         )
+        model_init_kwargs["attn_implementation"] = "sdpa" # force scaled dot product attention
         model = AutoModelForCausalLM.from_pretrained(
             self.model_name_or_path, **model_init_kwargs
         )
