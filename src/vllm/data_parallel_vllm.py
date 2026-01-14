@@ -240,9 +240,9 @@ class ParallelvLLMInference:
             from ..utils.shared_memory import load_shared_state_dict
 
             state = load_shared_state_dict(meta).items()
-            llm.llm_engine.model_executor.driver_worker.model_runner.model.load_weights(
-                state
-            )
+            # llm.llm_engine.model_executor.driver_worker.model_runner.model.load_weights(
+            #     state
+            # )
             return llm.chat(prompts, sampling_params=sampling_params)
 
         return llm.chat(prompts, sampling_params=sampling_params)
@@ -266,7 +266,6 @@ class ParallelvLLMInference:
 
         llm = LLM(
             model=self.model_path,
-            task=str(inference_task),
             tensor_parallel_size=self.gpus_per_instance,
             trust_remote_code=True,
             gpu_memory_utilization=self.gpu_memory_utilization,
@@ -334,7 +333,7 @@ class ParallelvLLMInference:
 
         destroy_model_parallel()
         destroy_distributed_environment()
-        del llm.llm_engine.model_executor
+        # del llm.llm_engine.model_executor
         del llm
         with contextlib.suppress(AssertionError):
             torch.distributed.destroy_process_group()
