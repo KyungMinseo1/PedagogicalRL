@@ -189,3 +189,17 @@ lighteval vllm \
     pages = "272--292",
     ISBN = "979-8-89176-332-6"
 ```
+---
+
+## Paths
+`/mnt/c/Users/pegoo/Desktop/25년도 겨울학기/URP/PedagogicalRL`
+## Start
+```
+source pedagogy/venv/bin/activate
+
+cd '/mnt/c/Users/pegoo/Desktop/25년도 겨울학기/URP/PedagogicalRL'
+
+./start_rl_training.sh \
+  --config_file config/deepspeed/1GPU.yaml \
+  --config-name 1b.yaml
+```
