@@ -102,7 +102,7 @@ def main(cfg: RLModelTrainingConfig):
     # Rewards
     #############################################################################
 
-    end_rm_reward = construct_end_rm_reward_func(cfg.generation.server_port)
+    # end_rm_reward = construct_end_rm_reward_func(cfg.generation.server_port)
     constructivist_reward = construct_constructivist_reward_func(cfg.generation.server_port)
     thinking_reward = construct_thinking_reward_func(cfg.generation.server_port)
     end_of_conversation_reward = construct_end_of_conversation_reward_func(
@@ -131,7 +131,8 @@ def main(cfg: RLModelTrainingConfig):
     trainer = ClassroomGRPOTrainer(
         model=model_config.model_name_or_path,
         reward_funcs=[
-            end_rm_reward,
+            # end_rm_reward,
+            constructivist_reward,
             thinking_reward,
             end_of_conversation_reward,
             length_reward,
