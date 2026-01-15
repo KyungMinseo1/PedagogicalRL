@@ -78,5 +78,5 @@ generation:
   use_experimental_shared_memory: false
   
   # If we turn this on we get the lambda=0.0 run
-  # number_judge_attempts: 0
+  number_judge_attempts: 2
   # judges_rules_prompts_paths: {}
