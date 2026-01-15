@@ -130,6 +130,7 @@ class Conversation:
         self.judge_decisions: Dict[str, list[JudgeResponse]] = {}
         self.solutions: list[str] = []
         self.rewards: list[float] = []
+        self.constructivist_rewards: list[float] = []
 
         self.tokenizer = get_tokenizer(generation_cfg.tokenizer_to_use)
 
@@ -384,6 +385,53 @@ class Conversation:
             conversation.append({"role": "user", "content": self.student_final_prompt})
             return conversation
 
+    def get_constructivist_conversation(self):
+        if self.state == ConversationState.TEACHER_TURN:
+            conversation = [
+                {"role": "system", "content": self.system_prompt_teacher}
+            ] + self._get_conversation_from_teacher_perspective()
+            return conversation
+
+        elif self.state == ConversationState.STUDENT_TURN:
+            # If this is the first message in a guided conversation we request the student to start the conversation
+            if self.type == ConversationType.ATTEMPTED and len(self.conversation) == 0:
+                return [
+                    {"role": "system", "content": self.system_prompt_student_attempt}
+                ]
+            conversation = [
+                {"role": "system", "content": self.system_prompt_student}
+            ] + self._get_conversation_from_student_perspective()
+            return conversation
+
+        elif self.state == ConversationState.JUDGE_TURN:
+            remaining_judge_rules = list(
+                set(self.generation_cfg.judges_rules_constructivist_prompts_paths.keys())
+                - set(self.judge_decisions.keys())
+            )
+            if len(remaining_judge_rules) == 0:
+                raise ValueError(
+                    "All judge rules have been evaluated, makes no sense we are at this state"
+                )
+            judge_rule = remaining_judge_rules[0]
+            self.judge_evaluation_type = judge_rule
+            return [
+                {
+                    "role": "user",
+                    "content": Template(
+                        open(
+                            self.generation_cfg.judges_rules_constructivist_prompts_paths[judge_rule]
+                        ).read()
+                    ).render(conversation=self._get_hidden_conversation()),
+                }
+            ]
+
+        elif self.state == ConversationState.GENERATE_SOLUTION:
+            conversation = [
+                {"role": "system", "content": self.system_prompt_student}
+            ] + self._get_conversation_from_student_perspective()
+            conversation.append({"role": "user", "content": self.student_final_prompt})
+            return conversation
+
     def add_message(self, content: str):
         if self.state == ConversationState.TEACHER_TURN:
             self.conversation.append({"role": "teacher", "content": content})
@@ -427,6 +475,21 @@ class Conversation:
                     return
         if len(self.judge_decisions) == len(
             self.generation_cfg.judges_rules_prompts_paths
+        ):
+            self.state = ConversationState.GENERATE_SOLUTION
+
+    def add_constructivist_judge_decisions(self, decisions: List[JudgeResponse]):
+        if self.state != ConversationState.JUDGE_TURN:
+            raise ValueError("We are not in the judge turn state")
+        self.judge_decisions[self.judge_evaluation_type] = decisions
+        for decision in decisions:
+            if decision.decision == JudgeDecision.REJECT:
+                self.failed_judges = True
+                if not self.generation_cfg.ignore_rejected_judge:
+                    self.state = ConversationState.END
+                    return
+        if len(self.judge_decisions) == len(
+            self.generation_cfg.judges_rules_constructivist_prompts_paths
         ):
             self.state = ConversationState.GENERATE_SOLUTION
 
@@ -481,6 +544,12 @@ class Conversation:
         self.rewards = rewards
         self.state = ConversationState.END
 
+    def add_constructivist_rewards(self, rewards: List[float]):
+        if self.state != ConversationState.REWARD_TURN:
+            raise ValueError("We are not in the reward turn state")
+        self.constructivist_rewards = rewards
+        self.state = ConversationState.END
+
     def add_initial_attempts(self, attempts: List[str]):
         self.initial_attempts = attempts
 
@@ -489,6 +558,12 @@ class Conversation:
             sum(self.rewards) / len(self.rewards) if len(self.rewards) > 0 else None
         )
         return average_rm_reward
+
+    def get_construtivist_reward(self):
+        average_constructivist_reward = (
+            sum(self.constructivist_rewards) / len(self.constructivist_rewards) if len(self.constructivist_rewards) > 0 else None
+        )
+        return average_constructivist_reward
 
     def get_initial_rm_reward(self):
         average_rm_reward = (
@@ -499,7 +574,8 @@ class Conversation:
         return average_rm_reward
 
     def get_thinking_reward(self):
-        if len(self.rewards) == 0:
+        # if len(self.rewards) == 0:
+        if len(self.constructivist_rewards) == 0:
             return 0.0
         penalty_for_missing_closing_think = 0.0
         count_used_thinking, count_total = 0, 0
@@ -518,7 +594,8 @@ class Conversation:
         )
 
     def get_end_of_conversation_reward(self):
-        if len(self.rewards) == 0:
+        # if len(self.rewards) == 0:
+        if len(self.constructivist_rewards) == 0:
             return 0.0
 
         return (
@@ -571,7 +648,8 @@ class Conversation:
                         for key, decisions in self.judge_decisions.items()
                     },
                     "Solutions": self.solutions,
-                    "Rewards": self.rewards,
+                    # "Rewards": self.rewards,
+                    "Rewards": self.constructivist_rewards,
                     "Initial Attempts": self.initial_attempts,
                     "Initial Rewards": self.initial_rewards,
                     "Conversation from student perspective": self._get_conversation_from_student_perspective(),
@@ -784,6 +862,25 @@ class Classroom:
             rewards = [0.0 for _ in prompts]
         return rewards
 
+    def _compute_constructivist_rewards_from_prompts(
+        self, prompts: List[str], answers: List[str]
+    ) -> List[float]:
+        if self.reward_model_cfg.model_name_or_path not in ["None", "Answer"]:
+            responses = self.reward_model.run_batch(prompts, None)
+            rewards = [
+                output.outputs.data[-1].item() if hasattr(output, "outputs") else 1.0
+                for output in responses
+            ]
+        elif self.reward_model_cfg.model_name_or_path == "Answer":
+            extracted_answers = [extract_answer(prompt) for prompt in prompts]
+            rewards = [
+                1.0 if check_equal(answer, extracted_answer) else 0.0
+                for answer, extracted_answer in zip(answers, extracted_answers)
+            ]
+        elif self.reward_model_cfg.model_name_or_path == "None":
+            rewards = [0.0 for _ in prompts]
+        return rewards
+
     def generate_next_teacher_utterances(
         self, conversations: List[Conversation], meta: dict = None
     ) -> List[str]:
@@ -793,7 +890,8 @@ class Classroom:
         """
         if meta is None:
             meta = {}
-        prompts = [conv.get_conversation() for conv in conversations]
+        # prompts = [conv.get_conversation() for conv in conversations]
+        prompts = [conv.get_constructivist_conversation() for conv in conversations]
         responses = self.teacher_model.run_batch(
             prompts, self.sampling_params_teacher, meta
         )
@@ -809,7 +907,8 @@ class Classroom:
         Given a list of Conversation objects in STUDENT_TURN, generate the next student utterance
         for each and add it to the conversation.
         """
-        prompts = [conv.get_conversation() for conv in conversations]
+        # prompts = [conv.get_conversation() for conv in conversations]
+        prompts = [conv.get_constructivist_conversation() for conv in conversations]
         responses = self.student_model.run_batch(prompts, self.sampling_params_student)
         student_utterances = [response.outputs[0].text for response in responses]
         for conv, utterance in zip(conversations, student_utterances):
@@ -877,7 +976,8 @@ class Classroom:
                     [conversation.answer] * len(conversation.initial_attempts)
                 )
 
-            rewards = self._compute_rewards_from_prompts(all_prompts, all_answers)
+            # rewards = self._compute_rewards_from_prompts(all_prompts, all_answers)
+            rewards = self._compute_constructivist_rewards_from_prompts(all_prompts, all_answers)
 
             for conv in conversations:
                 curr_len = lengths.pop(0)
@@ -917,7 +1017,8 @@ class Classroom:
 
                 # We get the messages from the conversations (not used further here since helper methods call get_conversation internally)
                 messages = [
-                    conversation.get_conversation()
+                    # conversation.get_conversation()
+                    conversation.get_constructivist_conversation()
                     for conversation in conversations_to_process
                 ]
 
@@ -971,7 +1072,8 @@ class Classroom:
                     missing = num_attempts_required - len(valid_responses[conv])
                     if missing > 0:
                         for _ in range(missing):
-                            pending.append((conv, conv.get_conversation()))
+                            # pending.append((conv, conv.get_conversation()))
+                            pending.append((conv, conv.get_constructivist_conversation()))
 
                 if not pending:
                     break  # All conversations have enough valid responses.
@@ -1007,7 +1109,8 @@ class Classroom:
                     valid_responses[conv].append(
                         JudgeResponse(reasoning="max turns exceeded", decision="OK")
                     )
-                conv.add_judge_decisions(valid_responses[conv])
+                # conv.add_judge_decisions(valid_responses[conv])
+                conv.add_constructivist_judge_decisions(valid_responses[conv])
 
         self.judge_model.sleep()
         logger.info(f"Took {time.time() - start_time} seconds.")
@@ -1026,7 +1129,8 @@ class Classroom:
 
         if len(conversations_to_process) > 0:
             messages = [
-                conversation.get_conversation()
+                # conversation.get_conversation()
+                conversation.get_constructivist_conversation()
                 for conversation in conversations_to_process
             ]
             responses = self.student_model.run_batch(
@@ -1055,7 +1159,8 @@ class Classroom:
                 lengths.append(len(prompts))
                 all_prompts.extend(prompts)
                 all_answers.extend([conv.answer] * len(prompts))
-            rewards = self._compute_rewards_from_prompts(all_prompts, all_answers)
+            # rewards = self._compute_rewards_from_prompts(all_prompts, all_answers)
+            rewards = self._compute_constructivist_rewards_from_prompts(all_prompts, all_answers)
             for conv in reward_convs:
                 curr_len = lengths.pop(0)
                 conv_rewards = rewards[:curr_len]
@@ -1108,7 +1213,8 @@ class Classroom:
                     missing = num_attempts_required - len(valid_responses[conv])
                     if missing > 0:
                         for _ in range(missing):
-                            pending.append((conv, conv.get_conversation()))
+                            # pending.append((conv, conv.get_conversation()))
+                            pending.append((conv, conv.get_constructivist_conversation()))
 
                 if not pending:
                     break  # All conversations have enough valid responses.
@@ -1143,7 +1249,8 @@ class Classroom:
                     valid_responses[conv].append(
                         JudgeResponse(reasoning="max turns exceeded", decision="OK")
                     )
-                conv.add_judge_decisions(valid_responses[conv])
+                # conv.add_judge_decisions(valid_responses[conv])
+                conv.add_constructivist_judge_decisions(valid_responses[conv])
 
         self.judge_model.sleep()
         logger.info(f"Took {time.time() - start_time} seconds.")
@@ -1185,6 +1292,26 @@ class Classroom:
                 if conv.problem == conversation.problem
             ]
             rewards = [conv.get_end_rm_reward() for conv in conversations]
+            rewards = [reward for reward in rewards if reward is not None]
+            minimum_reward = -self.generation_cfg.extra_penalty_for_rejected_judges
+
+            return minimum_reward
+
+        if conversation.failed_judges:
+            reward -= self.generation_cfg.extra_penalty_for_rejected_judges
+        return reward
+    
+    def get_constructivist_reward(self, conversation: Conversation):
+        import os
+
+        reward = conversation.get_constructivist_reward()
+        if reward == None:
+            conversations = [
+                conv
+                for conv in self.conversation_sets[-1]
+                if conv.problem == conversation.problem
+            ]
+            rewards = [conv.get_constructivist_reward() for conv in conversations]
             rewards = [reward for reward in rewards if reward is not None]
             minimum_reward = -self.generation_cfg.extra_penalty_for_rejected_judges
 

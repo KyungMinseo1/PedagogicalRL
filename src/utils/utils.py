@@ -149,6 +149,7 @@ def extract_answer(solution):
 ################################################################################
 from src.vllm.client import (
     get_end_of_conversation_reward,
+    get_constructivist_reward,
     get_end_rm_reward,
     get_length_reward,
     get_thinking_reward,
@@ -160,6 +161,12 @@ def construct_end_rm_reward_func(server_port: 8000):
         return get_end_rm_reward(conversations=completions, server_port=server_port)
 
     return end_rm_reward_func
+
+def construct_constructivist_reward_func(server_port: 8000):
+    def end_constructivist_reward_func(completions, **kwargs):
+        return get_constructivist_reward(conversations=completions, server_port=server_port)
+
+    return end_constructivist_reward_func
 
 
 def construct_thinking_reward_func(server_port: 8000):
