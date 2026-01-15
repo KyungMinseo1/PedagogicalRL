@@ -17,6 +17,7 @@ from src.grpo.config import ClassroomGRPOConfig
 from src.grpo.trainer import ClassroomGRPOTrainer
 from src.utils.utils import (
     construct_end_of_conversation_reward_func,
+    construct_constructivist_reward_func,
     construct_end_rm_reward_func,
     construct_length_reward_func,
     construct_thinking_reward_func,
@@ -102,6 +103,7 @@ def main(cfg: RLModelTrainingConfig):
     #############################################################################
 
     end_rm_reward = construct_end_rm_reward_func(cfg.generation.server_port)
+    constructivist_reward = construct_constructivist_reward_func(cfg.generation.server_port)
     thinking_reward = construct_thinking_reward_func(cfg.generation.server_port)
     end_of_conversation_reward = construct_end_of_conversation_reward_func(
         cfg.generation.server_port

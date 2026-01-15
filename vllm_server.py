@@ -92,6 +92,15 @@ def get_end_rm_reward(request: RewardRequest):
     rewards = [classroom.get_end_rm_reward(c) for c in conversations]
     return rewards
 
+@app.post("/get_constructivist_reward")
+def get_constructivist_reward(request: RewardRequest):
+    global classroom
+    conversations: list[Conversation] = [
+        classroom.get_conversation_by_text(c) for c in request.conversations
+    ]
+    rewards = [classroom.get_constructivist_reward(c) for c in conversations]
+    return rewards
+
 
 @app.post("/get_thinking_reward")
 def get_thinking_reward(request: RewardRequest):
