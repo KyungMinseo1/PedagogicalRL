@@ -559,7 +559,7 @@ class Conversation:
         )
         return average_rm_reward
 
-    def get_construtivist_reward(self):
+    def get_constructivist_reward(self):
         average_constructivist_reward = (
             sum(self.constructivist_rewards) / len(self.constructivist_rewards) if len(self.constructivist_rewards) > 0 else None
         )
@@ -1164,7 +1164,8 @@ class Classroom:
             for conv in reward_convs:
                 curr_len = lengths.pop(0)
                 conv_rewards = rewards[:curr_len]
-                conv.add_rewards(conv_rewards)
+                # conv.add_rewards(conv_rewards)
+                conv.add_constructivist_rewards(conv_rewards)
                 rewards = rewards[curr_len:]
 
         logger.info(f"Took {time.time() - start_time} seconds.")
