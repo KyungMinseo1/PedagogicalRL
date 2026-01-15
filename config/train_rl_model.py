@@ -85,6 +85,16 @@ class GenerationConfig:
         }
     )
 
+    judges_rules_constructivist_prompts_paths: Dict[str, str] = field(
+        default_factory=lambda: {
+            "answer": "prompt_templates/judges/checklist/answer.txt",
+            "solution_process": "prompt_templates/judges/checklist/solution_process.txt",
+            "scaffolding": "prompt_templates/judges/checklist/scaffolding.txt",
+            "relevance": "prompt_templates/judges/checklist/relevance.txt",
+            "application": "prompt_templates/judges/checklist/application.txt",
+        }
+    )
+
     student_initial_attempt_prompt_path: str = (
         "prompt_templates/student_initial_attempt_prompt.txt"
     )
@@ -107,7 +117,7 @@ class GenerationConfig:
     # If any judge attempt is rejected we give a negative reward and no reward computation is performed.
     number_judge_attempts: int = 2
     ignore_rejected_judge: bool = False  # We do not ignore rejected judge attempts.
-    forced_conversation_type: Optional[str] = None  # 'guided' or 'attempt
+    forced_conversation_type: Optional[str] = None  # 'guided' or 'attempt'
     use_thinking: bool = False
     force_thinking: bool = False
 
