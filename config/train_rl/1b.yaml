@@ -73,6 +73,7 @@ generation:
 
   # This turns on the hard lambda.
   extra_penalty_for_rejected_judges: 1.0 # This is the actual lambda we use.
+  use_soft_pedagogical_reward: true # If we set this to true we calculate each rewards following the pedagogical rule independently.
   ignore_rejected_judge: false # If we set this to false we get the soft lambda runs.
 
   use_experimental_shared_memory: false

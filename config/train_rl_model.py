@@ -123,6 +123,7 @@ class GenerationConfig:
 
     # Reward config
     extra_penalty_for_rejected_judges: float = 0.25
+    use_soft_pedagogical_reward: bool = True  # We use the average reward of each pedagogical rules.
 
     # Server settings
     server_port: int = 8005
