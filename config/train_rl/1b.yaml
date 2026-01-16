@@ -9,7 +9,7 @@ train:
   save_policy_to_disk_every_n: 5
 
 teacher_model:
-  model_name_or_path: Qwen/Qwen2.5-0.5B-Instruct
+  model_name_or_path: Qwen/Qwen2.5-0.5B-Instruct-GPTQ-Int4
   lora:
     enable: true
   vllm:
@@ -24,7 +24,7 @@ teacher_model:
     enforce_eager: true
 
 student_model:
-  model_name_or_path: Qwen/Qwen2.5-0.5B-Instruct
+  model_name_or_path: Qwen/Qwen2.5-0.5B-Instruct-GPTQ-Int4
   vllm:
     temperature: 0.6
     max_length: 10000
@@ -37,7 +37,7 @@ student_model:
     load_and_unload: true
 
 judge_model:
-  model_name_or_path: Qwen/Qwen2.5-1.5B-Instruct-AWQ
+  model_name_or_path: Qwen/Qwen2.5-1.5B-Instruct-GPTQ-Int4
   vllm:
     temperature: 0.6
     max_length: 10000
@@ -74,7 +74,7 @@ generation:
   # This turns on the hard lambda.
   extra_penalty_for_rejected_judges: 1.0 # This is the actual lambda we use.
   use_soft_pedagogical_reward: true # If we set this to true we calculate each rewards following the pedagogical rule independently.
-  ignore_rejected_judge: false # If we set this to false we get the soft lambda runs.
+  ignore_rejected_judge: true # If we set this to false we get the soft lambda runs. (If you use soft pedagogical reward, set this to true)
 
   use_experimental_shared_memory: false
   
