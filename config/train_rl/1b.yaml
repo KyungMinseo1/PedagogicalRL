@@ -9,7 +9,7 @@ train:
   save_policy_to_disk_every_n: 5
 
 teacher_model:
-  model_name_or_path: Qwen/Qwen2.5-0.5B-Instruct-GPTQ-Int4
+  model_name_or_path: Qwen/Qwen2.5-0.5B-Instruct
   lora:
     enable: true
   vllm:
@@ -24,7 +24,7 @@ teacher_model:
     enforce_eager: true
 
 student_model:
-  model_name_or_path: Qwen/Qwen2.5-0.5B-Instruct-GPTQ-Int4
+  model_name_or_path: Qwen/Qwen2.5-0.5B-Instruct
   vllm:
     temperature: 0.6
     max_length: 10000
@@ -37,7 +37,7 @@ student_model:
     load_and_unload: true
 
 judge_model:
-  model_name_or_path: Qwen/Qwen2.5-1.5B-Instruct-GPTQ-Int4
+  model_name_or_path: Qwen/Qwen2.5-1.5B-Instruct-AWQ
   vllm:
     temperature: 0.6
     max_length: 10000
