@@ -8,6 +8,8 @@ train:
 
 teacher_model:
   model_name_or_path: Qwen/Qwen2.5-7B-Instruct
+  lora:
+    enable: true
   vllm:
     temperature: 1.0
     max_length: 12000
@@ -53,7 +55,7 @@ huggingface:
 
 logging:
   wandb: true
-  wandb_project: train-rl
+  wandb_project: train-rl_LAB
   wandb_run_name: Qwen2.5-7B-Instruct-HardLambda1.0
   run_group: 7b
   wandb_tags: ["7b"]
