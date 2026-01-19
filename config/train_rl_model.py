@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 @dataclass
 class LoraConfig:
     enable: bool = False
-    rank: int = 16
+    rank: int = 32
     alpha: float = 32
     target_modules: Any = "all-linear"
     dropout: float = 0.01
@@ -32,6 +32,7 @@ class ModelvLLMConfig:
     load_and_unload: bool = True
 
     bits_and_bytes: bool = False
+    use_awq: bool = False
     enable_sleep_mode: bool = True
     use_v0: bool = True
     enforce_eager: bool = False
