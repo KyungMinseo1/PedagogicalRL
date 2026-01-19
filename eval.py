@@ -2,11 +2,12 @@ import os
 import hydra
 import wandb
 import warnings
+from typing import List
 from omegaconf import OmegaConf
 from hydra.core.config_store import ConfigStore
 from dotenv import load_dotenv
 
-from src.classroom import Classroom, JudgeDecision
+from src.classroom import Classroom, JudgeDecision, Conversation
 from utils.data import load_datasets
 from config.eval import EvalConfig
 from src.utils.utils import init_logger
@@ -17,6 +18,35 @@ cs = ConfigStore.instance()
 cs.store(name="config", node=EvalConfig)
 warnings.filterwarnings("ignore")
 
+def check_judge_decision(checklist_name: str, problem_num: int, times_num: int, conversations: List[Conversation]):
+    """
+    Function 
+
+    Args:
+        checklist_name (str): Name of checklist (One of keys in judge's decision)
+        problem_num (int): Number of problems for student model to solve
+        times_num (int): Number of trys for each problem
+        conversations (List[Conversation]): Actual conversations between student & teacher model
+    """
+    overall_decisions = []
+    for i in range(problem_num):
+        current_decisions = []
+        for j in range(times_num):
+            decisions = [
+                d.decision
+                for d in conversations[
+                    i * times_num + j
+                ].judge_decisions[checklist_name]
+            ]
+            current_decisions.append(
+                decisions.count(JudgeDecision.REJECT) / len(decisions)
+            )
+        overall_decisions.append(sum(current_decisions) / len(current_decisions))
+
+    overall_mean = sum(overall_decisions) / len(overall_decisions)
+    print(f"{checklist_name.upper()} mean: {overall_mean}")
+
+    return overall_mean
 
 @hydra.main(config_path="config/eval", version_base=None)
 def main(cfg: EvalConfig):
@@ -81,10 +111,11 @@ def main(cfg: EvalConfig):
                 current_deltas.append(
                     conversations[
                         i * number_of_times_to_average + j
-                    ].get_end_rm_reward()
-                    - conversations[
+                    # ].get_end_rm_reward()
+                    ].get_constructivist_reward() # Post-tutoring student solution accuracy
+                    - conversations[ # type: ignore
                         i * number_of_times_to_average + j
-                    ].get_initial_rm_reward()
+                    ].get_initial_rm_reward() # Pre-tutoring student solution accuracy
                 )
             deltas.append(sum(current_deltas) / len(current_deltas))
         delta_mean = sum(deltas) / len(deltas)
@@ -98,65 +129,39 @@ def main(cfg: EvalConfig):
                 current_rewards.append(
                     conversations[
                         i * number_of_times_to_average + j
-                    ].get_initial_rm_reward()
+                    ].get_initial_rm_reward() # Pre-tutoring student solution accuracy
                 )
             initial_rm_rewards.append(sum(current_rewards) / len(current_rewards))
         initial_rm_mean = sum(initial_rm_rewards) / len(initial_rm_rewards)
         print(f"Initial RM mean: {initial_rm_mean}")
 
     # Mean after
-    end_rm_rewards = []
+    # end_rm_rewards = []
+    # for i in range(len(_problems_we_sample)):
+    #     current_rewards = []
+    #     for j in range(number_of_times_to_average):
+    #         current_rewards.append(
+    #             conversations[i * number_of_times_to_average + j].get_end_rm_reward()
+    #         )
+    #     end_rm_rewards.append(sum(current_rewards) / len(current_rewards))
+    # end_rm_mean = sum(end_rm_rewards) / len(end_rm_rewards)
+    constructivist_rewards = []
     for i in range(len(_problems_we_sample)):
         current_rewards = []
         for j in range(number_of_times_to_average):
             current_rewards.append(
-                conversations[i * number_of_times_to_average + j].get_end_rm_reward()
+                conversations[i * number_of_times_to_average + j].get_constructivist_reward() # Post-tutoring student solution accuracy
             )
-        end_rm_rewards.append(sum(current_rewards) / len(current_rewards))
-    end_rm_mean = sum(end_rm_rewards) / len(end_rm_rewards)
-    print(f"End RM mean: {end_rm_mean}")
+        constructivist_rewards.append(sum(current_rewards) / len(current_rewards))
+    constructivist_reward_mean = sum(constructivist_rewards) / len(constructivist_rewards)
+    print(f"Constructivist Reward mean: {constructivist_reward_mean}")
 
-    # Compute leaked solutions rate across conversations
-    leaked_solutions = []
-    for i in range(len(_problems_we_sample)):
-        current_decisions = []
-        for j in range(number_of_times_to_average):
-            decisions = [
-                d.decision
-                for d in conversations[
-                    i * number_of_times_to_average + j
-                ].judge_decisions["does_not_leak_answer"]
-            ]
-            current_decisions.append(
-                decisions.count(JudgeDecision.REJECT) / len(decisions)
-            )
-        leaked_solutions.append(sum(current_decisions) / len(current_decisions))
-
-    leaked_mean = sum(leaked_solutions) / len(leaked_solutions)
-    print(f"Leaked solutions mean: {leaked_mean}")
-
-    # Compute the rate at which pedagogical values are rejected
-    follows_pedagogical_values = []
-    for i in range(len(_problems_we_sample)):
-        current_decisions = []
-        for j in range(number_of_times_to_average):
-            decisions = [
-                d.decision
-                for d in conversations[
-                    i * number_of_times_to_average + j
-                ].judge_decisions["follows_pedagogical_values"]
-            ]
-            current_decisions.append(
-                decisions.count(JudgeDecision.REJECT) / len(decisions)
-            )
-        follows_pedagogical_values.append(
-            sum(current_decisions) / len(current_decisions)
-        )
-
-    does_not_follow_mean = sum(follows_pedagogical_values) / len(
-        follows_pedagogical_values
-    )
-    print(f"Does not follow pedagogical values mean: {does_not_follow_mean}")
+    problem_num = len(_problems_we_sample)
+    leaked_answer_mean = check_judge_decision('answer', problem_num, number_of_times_to_average, conversations)
+    leaked_solution_process_mean = check_judge_decision('solution_process', problem_num, number_of_times_to_average, conversations)
+    does_not_follow_scaffolding_mean = check_judge_decision('scaffolding', problem_num, number_of_times_to_average, conversations)
+    does_not_follow_relevance_mean = check_judge_decision('relevance', problem_num, number_of_times_to_average, conversations)
+    does_not_follow_application_mean = check_judge_decision('application', problem_num, number_of_times_to_average, conversations)
 
     df_table = classroom.to_pd_latest()
 
@@ -191,9 +196,12 @@ def main(cfg: EvalConfig):
                 "initial_rm_rewards_mean": (
                     initial_rm_mean if cfg.recompute_initial_attempts else 0
                 ),
-                "end_rm_rewards_mean": end_rm_mean,
-                "leaked_solutions_mean": leaked_mean,
-                "rejects_pedagogical_values_mean": does_not_follow_mean,
+                "constructivist_rewards_mean": constructivist_reward_mean,
+                "leaked_answers_mean": leaked_answer_mean,
+                "leaked_solution_process_mean": leaked_solution_process_mean,
+                "rejects_scaffolding_mean": does_not_follow_scaffolding_mean,
+                "rejects_relevance_mean": does_not_follow_relevance_mean,
+                "rejects_application_mean": does_not_follow_application_mean,
                 "pedagogical_reward_macro_avg": pedagogical_reward_macro_avg,
                 "pedagogical_reward_micro_avg": pedagogical_reward_micro_avg,
             }

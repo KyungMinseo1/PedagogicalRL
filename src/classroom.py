@@ -139,6 +139,8 @@ class Conversation:
 
         self.failed_judges = False
 
+        self.constructivist_failed_judges = {}
+
         # SocraticLM special treatment.
         if (
             "teacher_message" in open(generation_cfg.teacher_prompt_path).read()
@@ -482,12 +484,15 @@ class Conversation:
         if self.state != ConversationState.JUDGE_TURN:
             raise ValueError("We are not in the judge turn state")
         self.judge_decisions[self.judge_evaluation_type] = decisions
+        failed = False
         for decision in decisions:
             if decision.decision == JudgeDecision.REJECT:
-                self.failed_judges = True
+                failed = True
                 if not self.generation_cfg.ignore_rejected_judge:
+                    self.constructivist_failed_judges[self.judge_evaluation_type] = failed
                     self.state = ConversationState.END
                     return
+        self.constructivist_failed_judges[self.judge_evaluation_type] = failed
         if len(self.judge_decisions) == len(
             self.generation_cfg.judges_rules_constructivist_prompts_paths
         ):
@@ -705,10 +710,12 @@ class Classroom:
                 max_num_seqs=teacher_model_cfg.vllm.max_num_seqs,
                 model_save_path=model_save_path,
                 use_lora=teacher_model_cfg.lora.enable,
+                max_lora_rank=teacher_model_cfg.lora.rank,
                 load_and_unload=teacher_model_cfg.vllm.load_and_unload,
                 max_number_of_instances=teacher_model_cfg.vllm.max_number_of_instances,
                 enable_sleep_mode=teacher_model_cfg.vllm.enable_sleep_mode,
                 bits_and_bytes=teacher_model_cfg.vllm.bits_and_bytes,
+                use_awq=teacher_model_cfg.vllm.use_awq,
                 from_0=teacher_model_cfg.vllm.from_0,
                 use_v0=teacher_model_cfg.vllm.use_v0,
                 enforce_eager=teacher_model_cfg.vllm.enforce_eager,
@@ -736,6 +743,7 @@ class Classroom:
                 load_and_unload=student_model_cfg.vllm.load_and_unload,
                 max_number_of_instances=student_model_cfg.vllm.max_number_of_instances,
                 bits_and_bytes=student_model_cfg.vllm.bits_and_bytes,
+                use_awq=student_model_cfg.vllm.use_awq,
                 enable_sleep_mode=student_model_cfg.vllm.enable_sleep_mode,
                 from_0=student_model_cfg.vllm.from_0,
                 use_v0=student_model_cfg.vllm.use_v0,
@@ -762,6 +770,7 @@ class Classroom:
                 load_and_unload=judge_model_cfg.vllm.load_and_unload,
                 max_number_of_instances=judge_model_cfg.vllm.max_number_of_instances,
                 bits_and_bytes=judge_model_cfg.vllm.bits_and_bytes,
+                use_awq=judge_model_cfg.vllm.use_awq,
                 enable_sleep_mode=judge_model_cfg.vllm.enable_sleep_mode,
                 enforce_eager=judge_model_cfg.vllm.enforce_eager,
                 from_0=judge_model_cfg.vllm.from_0,
@@ -782,6 +791,7 @@ class Classroom:
                 load_and_unload=reward_model_cfg.vllm.load_and_unload,
                 max_number_of_instances=reward_model_cfg.vllm.max_number_of_instances,
                 bits_and_bytes=reward_model_cfg.vllm.bits_and_bytes,
+                use_awq=reward_model_cfg.vllm.use_awq,
                 inference_task=InferenceTask.REWARD,
                 enable_sleep_mode=reward_model_cfg.vllm.enable_sleep_mode,
                 enforce_eager=reward_model_cfg.vllm.enforce_eager,
@@ -1303,23 +1313,31 @@ class Classroom:
         return reward
     
     def get_constructivist_reward(self, conversation: Conversation):
-        import os
 
-        reward = conversation.get_constructivist_reward()
+        reward = conversation.get_constructivist_reward() # student accuracy
         if reward == None:
             conversations = [
                 conv
                 for conv in self.conversation_sets[-1]
                 if conv.problem == conversation.problem
             ]
-            rewards = [conv.get_constructivist_reward() for conv in conversations]
+            rewards = [conv.get_constructivist_reward() for conv in conversations] # student accuracy
             rewards = [reward for reward in rewards if reward is not None]
             minimum_reward = -self.generation_cfg.extra_penalty_for_rejected_judges
 
             return minimum_reward
 
-        if conversation.failed_judges:
-            reward -= self.generation_cfg.extra_penalty_for_rejected_judges
+        # Make pedagogical reward softly
+        # -> Change constructivist_failed_judges type to Dict[String, Bool]
+        if self.generation_cfg.use_soft_pedagogical_reward:
+            sum_reward_from_judges = 0
+            for is_failed in conversation.constructivist_failed_judges.values():
+                # Add reward if judge's output is OK
+                sum_reward_from_judges += 0 if is_failed else 1
+            reward -= self.generation_cfg.extra_penalty_for_rejected_judges * (1 - (sum_reward_from_judges / len(conversation.constructivist_failed_judges)))
+        else:
+            if not all(conversation.constructivist_failed_judges.values()):
+                reward -= self.generation_cfg.extra_penalty_for_rejected_judges
         return reward
 
     def get_thinking_reward(self, conversation: Conversation):

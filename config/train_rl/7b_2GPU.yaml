@@ -1,23 +1,24 @@
 train:
-  number_of_problems_per_batch: 16
-  num_samples_per_problem: 8
+  number_of_problems_per_batch: 8
+  num_samples_per_problem: 4
 
-  learning_rate: 5e-7
+  learning_rate: 3e-7
   beta: 0.001
   mu: 2
 
 teacher_model:
-  model_name_or_path: Qwen/Qwen2.5-7B-Instruct
+  model_name_or_path: Qwen/Qwen2.5-7B-Instruct-AWQ
   lora:
     enable: true
   vllm:
     temperature: 1.0
     max_length: 12000
     max_num_seqs: 512
-    gpu_memory_utilization: 0.325
-    number_of_gpus_per_instance: 4
+    gpu_memory_utilization: 0.4
+    number_of_gpus_per_instance: 1
     max_number_of_instances: -1
-    load_and_unload: true
+    load_and_unload: false
+    use_awq: true
     use_v0: true
     enforce_eager: true
 
@@ -27,12 +28,12 @@ student_model:
     temperature: 0.6
     max_length: 12000
     max_num_seqs: 512
-    gpu_memory_utilization: 0.325
-    number_of_gpus_per_instance: 4
+    gpu_memory_utilization: 0.4
+    number_of_gpus_per_instance: 1
     max_number_of_instances: -1
-    use_v0: false
+    use_v0: true
 
-    load_and_unload: true
+    load_and_unload: false
 
 judge_model:
   model_name_or_path: Qwen/Qwen2.5-14B-Instruct-AWQ
@@ -40,11 +41,12 @@ judge_model:
     temperature: 0.6
     max_length: 12000
     max_num_seqs: 512
-    gpu_memory_utilization: 0.325
-    number_of_gpus_per_instance: 4
+    gpu_memory_utilization: 0.5
+    number_of_gpus_per_instance: 1
     max_number_of_instances: -1
     load_and_unload: false
-    use_v0: false
+    use_awq: true
+    use_v0: true
 
 reward_model:
   model_name_or_path: Answer # If we set this to None we get the -r_sol run.
@@ -56,10 +58,10 @@ huggingface:
 logging:
   wandb: true
   wandb_project: train-rl_LAB
-  wandb_run_name: Qwen2.5-7B-Instruct-HardLambda1.0
+  wandb_run_name: Qwen2.5-7B-Instruct-SoftPedagogyLambda1.0(AWQ_T_J)
   run_group: 7b
   wandb_tags: ["7b"]
-  save_dir: checkpoints/7b
+  save_dir: checkpoints/7b(AWQ_T_J)
   save_steps: 10
 
 

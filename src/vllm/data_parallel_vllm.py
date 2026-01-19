@@ -7,6 +7,7 @@ from multiprocess import get_context
 from multiprocess.queues import Empty
 from huggingface_hub import snapshot_download
 from src.utils.utils import init_logger
+from ..utils.shared_memory import load_shared_state_dict
 
 logger = init_logger()
 
@@ -30,10 +31,12 @@ class ParallelvLLMInference:
         enforce_eager: bool = False,
         model_save_path: Optional[str] = None,
         use_lora: bool = False,
+        max_lora_rank: int = 128,
         load_and_unload: bool = True,
         max_number_of_instances: int = -1,
         inference_task: InferenceTask = InferenceTask.GENERATE,
         bits_and_bytes: bool = False,
+        use_awq: bool = False,
         enable_sleep_mode: bool = True,
         from_0: bool = True,
         use_v0: bool = False,
@@ -51,9 +54,11 @@ class ParallelvLLMInference:
         self.max_num_seqs = max_num_seqs
         self.enforce_eager = enforce_eager
         self.use_lora = use_lora
+        self.max_lora_rank = max_lora_rank
         self.load_and_unload = load_and_unload
         self.inference_task = inference_task
         self.bits_and_bytes = bits_and_bytes
+        self.use_awq = use_awq
         self.enable_sleep_mode = enable_sleep_mode
         self.use_v0 = use_v0
         self.logging_enabled = logging_enabled
@@ -244,14 +249,16 @@ class ParallelvLLMInference:
         lora_request: Optional["LoRARequest"] = None,
     ):
         if meta is not None:
-            from ..utils.shared_memory import load_shared_state_dict
-
             state = load_shared_state_dict(meta).items()
-            # llm.llm_engine.model_executor.driver_worker.model_runner.model.load_weights(
-            #     state
-            # )
-            return llm.chat(prompts, sampling_params=sampling_params, lora_request=lora_request)
-
+            
+            try:
+                if hasattr(llm.llm_engine, 'model_executor'):
+                    llm.llm_engine.model_executor.driver_worker.model_runner.model.load_weights(state)
+                else:
+                    print("Warning: load_weights not supported in V1 engine yet")
+            except Exception as e:
+                print(f"Error loading weights: {e}")
+        
         return llm.chat(prompts, sampling_params=sampling_params, lora_request=lora_request)
 
     def _worker_loop(
@@ -272,6 +279,21 @@ class ParallelvLLMInference:
 
         print(f"Worker on GPUs {gpu_group} initializing for task '{inference_task}'...")
 
+        is_awq = (
+            self.use_awq
+            or "awq" in self.base_model_path.lower()
+        )
+
+        if is_awq:
+            quantization = "awq"
+            load_format = "auto"
+        elif self.bits_and_bytes:
+            quantization = "bitsandbytes"
+            load_format = "bitsandbytes"
+        else:
+            quantization = None
+            load_format = "auto"
+
         llm = LLM(
             model=self.base_model_path,
             tensor_parallel_size=self.gpus_per_instance,
@@ -280,11 +302,12 @@ class ParallelvLLMInference:
             max_model_len=self.max_model_len,
             max_num_seqs=self.max_num_seqs,
             enable_lora=self.use_lora,
+            max_lora_rank=self.max_lora_rank,
             enforce_eager=self.enforce_eager,
             enable_prefix_caching=False,
             enable_sleep_mode=self.enable_sleep_mode,
-            quantization="bitsandbytes" if self.bits_and_bytes else None,
-            load_format="bitsandbytes" if self.bits_and_bytes else "auto",
+            quantization=quantization,
+            load_format=load_format,
         )
 
         lora_request = None
@@ -343,11 +366,22 @@ class ParallelvLLMInference:
         )
         import contextlib
 
-        destroy_model_parallel()
-        destroy_distributed_environment()
-        # del llm.llm_engine.model_executor
-        del llm
-        with contextlib.suppress(AssertionError):
-            torch.distributed.destroy_process_group()
+        # llm 객체 삭제
+        try:
+            del llm
+        except:
+            pass
+
+        # 분산 환경 정리
+        with contextlib.suppress(Exception):
+            destroy_model_parallel()
+        
+        with contextlib.suppress(Exception):
+            destroy_distributed_environment()
+        
+        with contextlib.suppress(Exception):
+            if torch.distributed.is_initialized():
+                torch.distributed.destroy_process_group()
+        
         gc.collect()
         torch.cuda.empty_cache()
