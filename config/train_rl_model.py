@@ -92,7 +92,7 @@ class GenerationConfig:
             "solution_process": "prompt_templates/judges/checklist/solution_process.txt",
             "scaffolding": "prompt_templates/judges/checklist/scaffolding.txt",
             "relevance": "prompt_templates/judges/checklist/relevance.txt",
-            "application": "prompt_templates/judges/checklist/application.txt",
+            # "application": "prompt_templates/judges/checklist/application.txt",
         }
     )
 
