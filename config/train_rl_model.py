@@ -182,6 +182,25 @@ class TrainConfig:
     batch_size_ref_model: int = 4
     save_policy_to_disk_every_n: int = 1
 
+    reward_list: list[str] = field(
+        default_factory=lambda: [
+            "accuracy",
+            "pedagogical alignment",
+            "thinking",
+            "end of conversation",
+            "length"
+        ]
+    )
+    reward_weights: list[float] = field(
+        default_factory=lambda: [
+            0.2,
+            0.2,
+            0.2,
+            0.2,
+            0.2
+        ]
+    )
+
 
 @dataclass
 class HuggingFaceConfig:

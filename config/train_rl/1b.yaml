@@ -6,14 +6,18 @@ train:
   beta: 0.001
   mu: 2
 
+  reward_list: ["accuracy", "pedagogical alignment", "thinking", "end of conversation", "length"]
+  reward_weights: [0.3, 0.3, 0.2, 0.1, 0.1]
   save_policy_to_disk_every_n: 5
 
 teacher_model:
   model_name_or_path: Qwen/Qwen2.5-0.5B-Instruct
   lora:
     enable: true
+    rank: 8
+    alpha: 8
   vllm:
-    temperature: 0.7
+    temperature: 0.8
     max_length: 10000
     max_num_seqs: 512
     gpu_memory_utilization: 0.5
@@ -32,7 +36,7 @@ student_model:
     gpu_memory_utilization: 0.5
     number_of_gpus_per_instance: 1
     max_number_of_instances: -1
-    use_v0: false
+    use_v0: true
 
     load_and_unload: true
 
@@ -46,7 +50,8 @@ judge_model:
     number_of_gpus_per_instance: 1
     max_number_of_instances: -1
     load_and_unload: false
-    use_v0: false
+    use_awq: true
+    use_v0: true
 
 reward_model:
   model_name_or_path: Answer # If we set this to None we get the -r_sol run.
@@ -57,11 +62,11 @@ huggingface:
 
 logging:
   wandb: true
-  wandb_project: train-rl
-  wandb_run_name: Qwen2.5-1B-Instruct-Lambda1.0(LoRA)
-  run_group: 1b
-  wandb_tags: ["1b"]
-  save_dir: checkpoints/1b
+  wandb_project: train-rl_EXPERIMENT
+  wandb_run_name: Qwen2.5-0.5B-Instruct-Lambda1.0(LoRA16)
+  run_group: 0.5b
+  wandb_tags: ["0.5b"]
+  save_dir: checkpoints/0.5b
   save_steps: 10
 
 
@@ -79,5 +84,5 @@ generation:
   use_experimental_shared_memory: false
   
   # If we turn this on we get the lambda=0.0 run
-  number_judge_attempts: 2
+  number_judge_attempts: 1
   # judges_rules_prompts_paths: {}

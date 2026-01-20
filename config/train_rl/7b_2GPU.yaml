@@ -6,6 +6,9 @@ train:
   beta: 0.001
   mu: 2
 
+  reward_list: ["accuracy", "pedagogical alignment", "thinking", "end of conversation", "length"]
+  reward_weights: [0.3, 0.3, 0.2, 0.1, 0.1]
+
 teacher_model:
   model_name_or_path: Qwen/Qwen2.5-7B-Instruct
   lora:
