@@ -112,7 +112,7 @@ def main(cfg: EvalConfig):
                     conversations[
                         i * number_of_times_to_average + j
                     # ].get_end_rm_reward()
-                    ].get_constructivist_reward() # Post-tutoring student solution accuracy
+                    ].get_accuracy_reward() # Post-tutoring student solution accuracy
                     - conversations[ # type: ignore
                         i * number_of_times_to_average + j
                     ].get_initial_rm_reward() # Pre-tutoring student solution accuracy
@@ -145,16 +145,16 @@ def main(cfg: EvalConfig):
     #         )
     #     end_rm_rewards.append(sum(current_rewards) / len(current_rewards))
     # end_rm_mean = sum(end_rm_rewards) / len(end_rm_rewards)
-    constructivist_rewards = []
+    accuracy_rewards = []
     for i in range(len(_problems_we_sample)):
         current_rewards = []
         for j in range(number_of_times_to_average):
             current_rewards.append(
-                conversations[i * number_of_times_to_average + j].get_constructivist_reward() # Post-tutoring student solution accuracy
+                conversations[i * number_of_times_to_average + j].get_accuracy_reward() # Post-tutoring student solution accuracy
             )
-        constructivist_rewards.append(sum(current_rewards) / len(current_rewards))
-    constructivist_reward_mean = sum(constructivist_rewards) / len(constructivist_rewards)
-    print(f"Constructivist Reward mean: {constructivist_reward_mean}")
+        accuracy_rewards.append(sum(current_rewards) / len(current_rewards))
+    accuracy_reward_mean = sum(accuracy_rewards) / len(accuracy_rewards)
+    print(f"Accuracy Reward mean: {accuracy_reward_mean}")
 
     problem_num = len(_problems_we_sample)
     leaked_answer_mean = check_judge_decision('answer', problem_num, number_of_times_to_average, conversations)
@@ -196,7 +196,7 @@ def main(cfg: EvalConfig):
                 "initial_rm_rewards_mean": (
                     initial_rm_mean if cfg.recompute_initial_attempts else 0
                 ),
-                "constructivist_rewards_mean": constructivist_reward_mean,
+                "accuracy_rewards_mean": accuracy_reward_mean,
                 "leaked_answers_mean": leaked_answer_mean,
                 "leaked_solution_process_mean": leaked_solution_process_mean,
                 "rejects_scaffolding_mean": does_not_follow_scaffolding_mean,
@@ -209,8 +209,10 @@ def main(cfg: EvalConfig):
 
         # rewards = [classroom.get_end_rm_reward(c) for c in conversations]
         # df_table["end_rm_reward"] = rewards
-        rewards = [classroom.get_constructivist_reward(c) for c in conversations]
-        df_table["constructivist_reward"] = rewards
+        rewards = [classroom.get_accuracy_reward(c) for c in conversations]
+        df_table["accuracy_reward"] = rewards
+        rewards = [classroom.get_pedagogical_alignment_reward(c) for c in conversations]
+        df_table["pedagogical_alignment_reward"] = rewards
         rewards = [classroom.get_thinking_reward(c) for c in conversations]
         df_table["thinking_reward"] = rewards
         rewards = [classroom.get_end_of_conversation_reward(c) for c in conversations]
@@ -221,7 +223,8 @@ def main(cfg: EvalConfig):
         # sum of all rewards
         df_table["total_reward"] = (
             # df_table["end_rm_reward"]
-            df_table["constructivist_reward"]
+            df_table["accuracy_reward"]
+            + df_table["pedagogical_alignment_reward"]
             + df_table["thinking_reward"]
             + df_table["end_of_conversation_reward"]
             + df_table["length_reward"]

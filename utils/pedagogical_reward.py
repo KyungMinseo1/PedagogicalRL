@@ -124,13 +124,12 @@ def score_each_conversation(
         reward_model_path,
         gpu_memory_utilization=gpu_memory_utilization,
         max_model_len=max_model_len,
-        task="classify",
         dtype=torch.float32,
         # Allows us to get the logits directly.
         override_pooler_config=PoolerConfig(
             pooling_type="LAST",
             normalize=False,
-            softmax=False,
+            use_activation=False,
         ),
     )
 

@@ -67,11 +67,23 @@ def get_end_rm_reward(
     rewards = response.json()
     return rewards
 
-def get_constructivist_reward(
+def get_accuracy_reward(
     conversations: List[str],
     server_port: int = 8000,
 ) -> List[float]:
-    server_url = f"http://localhost:{server_port}/get_constructivist_reward"
+    server_url = f"http://localhost:{server_port}/get_accuracy_reward"
+
+    response = requests.post(server_url, json={"conversations": conversations})
+    response.raise_for_status()
+
+    rewards = response.json()
+    return rewards
+
+def get_pedagogical_alignment_reward(
+    conversations: List[str],
+    server_port: int = 8000,
+) -> List[float]:
+    server_url = f"http://localhost:{server_port}/get_pedagogical_alignment_reward"
 
     response = requests.post(server_url, json={"conversations": conversations})
     response.raise_for_status()

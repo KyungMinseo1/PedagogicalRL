@@ -130,7 +130,7 @@ class Conversation:
         self.judge_decisions: Dict[str, list[JudgeResponse]] = {}
         self.solutions: list[str] = []
         self.rewards: list[float] = []
-        self.constructivist_rewards: list[float] = []
+        self.accuracy_rewards: list[float] = []
 
         self.tokenizer = get_tokenizer(generation_cfg.tokenizer_to_use)
 
@@ -549,10 +549,10 @@ class Conversation:
         self.rewards = rewards
         self.state = ConversationState.END
 
-    def add_constructivist_rewards(self, rewards: List[float]):
+    def add_accuracy_rewards(self, rewards: List[float]):
         if self.state != ConversationState.REWARD_TURN:
             raise ValueError("We are not in the reward turn state")
-        self.constructivist_rewards = rewards
+        self.accuracy_rewards = rewards
         self.state = ConversationState.END
 
     def add_initial_attempts(self, attempts: List[str]):
@@ -564,11 +564,11 @@ class Conversation:
         )
         return average_rm_reward
 
-    def get_constructivist_reward(self):
-        average_constructivist_reward = (
-            sum(self.constructivist_rewards) / len(self.constructivist_rewards) if len(self.constructivist_rewards) > 0 else None
+    def get_accuracy_reward(self):
+        average_accuracy_reward = (
+            sum(self.accuracy_rewards) / len(self.accuracy_rewards) if len(self.accuracy_rewards) > 0 else None
         )
-        return average_constructivist_reward
+        return average_accuracy_reward
 
     def get_initial_rm_reward(self):
         average_rm_reward = (
@@ -580,7 +580,7 @@ class Conversation:
 
     def get_thinking_reward(self):
         # if len(self.rewards) == 0:
-        if len(self.constructivist_rewards) == 0:
+        if len(self.accuracy_rewards) == 0:
             return 0.0
         penalty_for_missing_closing_think = 0.0
         count_used_thinking, count_total = 0, 0
@@ -600,7 +600,7 @@ class Conversation:
 
     def get_end_of_conversation_reward(self):
         # if len(self.rewards) == 0:
-        if len(self.constructivist_rewards) == 0:
+        if len(self.accuracy_rewards) == 0:
             return 0.0
 
         return (
@@ -654,7 +654,7 @@ class Conversation:
                     },
                     "Solutions": self.solutions,
                     # "Rewards": self.rewards,
-                    "Rewards": self.constructivist_rewards,
+                    "Accuracy Rewards": self.accuracy_rewards,
                     "Initial Attempts": self.initial_attempts,
                     "Initial Rewards": self.initial_rewards,
                     "Conversation from student perspective": self._get_conversation_from_student_perspective(),
@@ -1175,7 +1175,7 @@ class Classroom:
                 curr_len = lengths.pop(0)
                 conv_rewards = rewards[:curr_len]
                 # conv.add_rewards(conv_rewards)
-                conv.add_constructivist_rewards(conv_rewards)
+                conv.add_accuracy_rewards(conv_rewards)
                 rewards = rewards[curr_len:]
 
         logger.info(f"Took {time.time() - start_time} seconds.")
@@ -1312,21 +1312,27 @@ class Classroom:
             reward -= self.generation_cfg.extra_penalty_for_rejected_judges
         return reward
     
-    def get_constructivist_reward(self, conversation: Conversation):
-
-        reward = conversation.get_constructivist_reward() # student accuracy
+    def get_accuracy_reward(self, conversation: Conversation):
+        reward = conversation.get_accuracy_reward() # student accuracy
         if reward == None:
             conversations = [
                 conv
                 for conv in self.conversation_sets[-1]
                 if conv.problem == conversation.problem
             ]
-            rewards = [conv.get_constructivist_reward() for conv in conversations] # student accuracy
+            rewards = [conv.get_accuracy_reward() for conv in conversations] # student accuracy
             rewards = [reward for reward in rewards if reward is not None]
             minimum_reward = -self.generation_cfg.extra_penalty_for_rejected_judges
 
             return minimum_reward
+        return reward
 
+    def get_pedagogical_alignment_reward(self, conversation: Conversation):
+        # We need to know if judge finished at all. 
+        if conversation.get_accuracy_reward() == None:
+            return -self.generation_cfg.extra_penalty_for_rejected_judges
+
+        reward = 0
         # Make pedagogical reward softly
         # -> Change constructivist_failed_judges type to Dict[String, Bool]
         if self.generation_cfg.use_soft_pedagogical_reward:

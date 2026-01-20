@@ -13,11 +13,14 @@ from dotenv import load_dotenv
 from transformers import AutoTokenizer
 from peft import LoraConfig as PeftLoraConfig
 from datasets import Dataset
-from src.grpo.config import ClassroomGRPOConfig
-from src.grpo.trainer import ClassroomGRPOTrainer
+# from src.grpo.config import ClassroomGRPOConfig
+from src.gdpo.config import ClassroomGDPOConfig
+# from src.grpo.trainer import ClassroomGRPOTrainer
+from src.gdpo.trainer import ClassroomGDPOTrainer
 from src.utils.utils import (
     construct_end_of_conversation_reward_func,
-    construct_constructivist_reward_func,
+    construct_accuracy_reward_func,
+    construct_pedagogical_alignment_reward_func,
     construct_end_rm_reward_func,
     construct_length_reward_func,
     construct_thinking_reward_func,
@@ -54,6 +57,21 @@ def main(cfg: RLModelTrainingConfig):
     data_config = cfg.dataset
 
     set_seed(cfg.seed)
+
+    assert len(train_config.reward_list) == len(train_config.reward_weights), "Your presented reward list & reward weights have different size. Please check your reward list again."
+
+    reward_dict = {
+        "accuracy": construct_accuracy_reward_func(cfg.generation.server_port),
+        "pedagogical alignment": construct_pedagogical_alignment_reward_func(cfg.generation.server_port),
+        "thinking": construct_thinking_reward_func(cfg.generation.server_port),
+        "end of conversation": construct_end_of_conversation_reward_func(cfg.generation.server_port),
+        "length": construct_length_reward_func(cfg.generation.server_port),
+    }
+    reward_func_list = [
+        reward_dict[reward_name]
+        for reward_name in train_config.reward_list
+        if reward_dict.get(reward_name, None) is not None
+    ]
 
     kwargs = [InitProcessGroupKwargs(timeout=timedelta(hours=10))]
     accelerator = Accelerator(kwargs_handlers=kwargs)
@@ -99,18 +117,6 @@ def main(cfg: RLModelTrainingConfig):
     )
 
     #############################################################################
-    # Rewards
-    #############################################################################
-
-    # end_rm_reward = construct_end_rm_reward_func(cfg.generation.server_port)
-    constructivist_reward = construct_constructivist_reward_func(cfg.generation.server_port)
-    thinking_reward = construct_thinking_reward_func(cfg.generation.server_port)
-    end_of_conversation_reward = construct_end_of_conversation_reward_func(
-        cfg.generation.server_port
-    )
-    length_reward = construct_length_reward_func(cfg.generation.server_port)
-
-    #############################################################################
     # PEFT Config
     #############################################################################
     peft_config = None
@@ -128,16 +134,13 @@ def main(cfg: RLModelTrainingConfig):
     # Training
     #############################################################################
 
-    trainer = ClassroomGRPOTrainer(
+    # trainer = ClassroomGRPOTrainer(
+    trainer = ClassroomGDPOTrainer(
         model=model_config.model_name_or_path,
-        reward_funcs=[
-            # end_rm_reward,
-            constructivist_reward,
-            thinking_reward,
-            end_of_conversation_reward,
-            length_reward,
-        ],
-        args=ClassroomGRPOConfig(
+        reward_funcs=reward_func_list,
+        reward_weights=train_config.reward_weights,
+        # args=ClassroomGRPOConfig(
+        args=ClassroomGDPOConfig(
             gradient_accumulation_steps=cfg.train.num_samples_per_problem
             * cfg.train.number_of_problems_per_batch
             // cfg.train.per_device_train_batch_size

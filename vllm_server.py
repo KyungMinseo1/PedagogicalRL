@@ -56,8 +56,10 @@ def sample_conversations(request: ConversationSampleRequest):
     df_table = classroom.to_pd_latest()
     # rewards = [classroom.get_end_rm_reward(c) for c in conversations]
     # df_table["end_rm_reward"] = rewards
-    rewards = [classroom.get_constructivist_reward(c) for c in conversations]
-    df_table["constructivist_reward"] = rewards
+    rewards = [classroom.get_accuracy_reward(c) for c in conversations]
+    df_table["accuracy_reward"] = rewards
+    rewards = [classroom.get_pedagogical_alignment_reward(c) for c in conversations]
+    df_table["pedagogical_alignment_reward"] = rewards
     rewards = [classroom.get_thinking_reward(c) for c in conversations]
     df_table["thinking_reward"] = rewards
     rewards = [classroom.get_end_of_conversation_reward(c) for c in conversations]
@@ -68,7 +70,8 @@ def sample_conversations(request: ConversationSampleRequest):
     # sum of all rewards
     df_table["total_reward"] = (
         # df_table["end_rm_reward"]
-        df_table["constructivist_reward"]
+        df_table["accuracy_reward"]
+        + df_table["pedagogical_alignment_reward"]
         + df_table["thinking_reward"]
         + df_table["end_of_conversation_reward"]
         + df_table["length_reward"]
@@ -95,13 +98,22 @@ def get_end_rm_reward(request: RewardRequest):
     rewards = [classroom.get_end_rm_reward(c) for c in conversations]
     return rewards
 
-@app.post("/get_constructivist_reward")
-def get_constructivist_reward(request: RewardRequest):
+@app.post("/get_accuracy_reward")
+def get_accuracy_reward(request: RewardRequest):
     global classroom
     conversations: list[Conversation] = [
         classroom.get_conversation_by_text(c) for c in request.conversations
     ]
-    rewards = [classroom.get_constructivist_reward(c) for c in conversations]
+    rewards = [classroom.get_accuracy_reward(c) for c in conversations]
+    return rewards
+
+@app.post("/get_pedagogical_alignment_reward")
+def get_pedagogical_alignment_reward(request: RewardRequest):
+    global classroom
+    conversations: list[Conversation] = [
+        classroom.get_conversation_by_text(c) for c in request.conversations
+    ]
+    rewards = [classroom.get_pedagogical_alignment_reward(c) for c in conversations]
     return rewards
 
 
