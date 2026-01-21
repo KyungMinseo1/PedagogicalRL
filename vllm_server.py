@@ -1,4 +1,6 @@
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 import wandb
 import hydra
 import uvicorn
@@ -12,13 +14,12 @@ from hydra.core.config_store import ConfigStore
 from src.classroom import Classroom, Conversation
 from config.train_rl_model import RLModelTrainingConfig
 from src.utils.utils import init_logger
-
 logger = init_logger()
 
 import warnings
 
 warnings.filterwarnings("ignore")
-load_dotenv()
+load_dotenv(override=False)
 
 lock = threading.Lock()
 
