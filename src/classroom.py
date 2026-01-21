@@ -834,21 +834,14 @@ class Classroom:
         teacher_tokenizer = AutoTokenizer.from_pretrained(
             generation_cfg.tokenizer_to_use
         )
-        thinking_tokens = teacher_tokenizer.encode("<think>", add_special_tokens=False)
-
-        def force_thinking_processor(token_ids, logits):
-            if len(token_ids) < len(thinking_tokens):
-                logits[thinking_tokens[len(token_ids)]] = 10000
-            return logits
-
         self.sampling_params_teacher = SamplingParams(
             temperature=teacher_model_cfg.vllm.temperature,
             top_k=teacher_model_cfg.vllm.top_k,
             top_p=teacher_model_cfg.vllm.top_p,
             max_tokens=generation_cfg.max_tokens_per_turn,
-            logits_processors=(
-                [force_thinking_processor] if generation_cfg.force_thinking else []
-            ),
+            # logits_processors=(
+            #     [force_thinking_processor] if generation_cfg.force_thinking else []
+            # ),
         )
 
         self.conversation_sets = []
