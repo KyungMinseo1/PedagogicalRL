@@ -248,6 +248,7 @@ class ParallelvLLMInference:
         counter: int,
         lora_request: Optional["LoRARequest"] = None,
     ):
+
         if meta is not None:
             state = load_shared_state_dict(meta).items()
             
@@ -271,6 +272,7 @@ class ParallelvLLMInference:
 
         if self.use_v0:
             os.environ["VLLM_USE_V1"] = "0"
+            os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
         else:
             os.environ["VLLM_WORKER_MULTIPROC_METHOD"] = "spawn"
 
